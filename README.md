@@ -5,4 +5,6 @@ A CNN used to detect presence of Covid-19 in chest x-rays
 VGGNet, ResNets (Residual Nets), Alexnet, Lenet-5.
 MobileNet for less computational expensive neural networks.
 
+# Dataset
+https://www.kaggle.com/datasets/andyczhao/covidx-cxr2?select=train.txt
 
