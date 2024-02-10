@@ -8,52 +8,13 @@ import os
 import cv2
 import torch
 import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score, recall_score, f1_score, precision_score
 
-
-# def load_images(folder_path, limit, resize_shape):
-#     images = []
-#     for filename in os.listdir(folder_path):
-#         if(len(images) >= limit):
-#             break
-#         img_path = os.path.join(folder_path, filename)
-#         if os.path.isfile(img_path):
-#             img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-#             if img is not None:
-#                 img = cv2.resize(img, resize_shape)
-#                 images.append(img)
-#     return images
-
-# def read_labels(folder_path, limit):
-#     labels = []
-#     negative = 0
-#     positive = 0
-#     count = 0
-#     with open(folder_path, 'r') as file:
-#         for line in file:
-#             words = line.split()
-            
-#             if(words[2] == 'negative'):
-#                 negative += 1
-#                 labels.append(0)
-#             else:
-#                 positive += 1
-#                 labels.append(1)
-#             # labels.append(words[2])
-#             count += 1
-#             if count >= limit:
-#                 break
-#     print(positive, negative)
-#     return labels
-
-# def stack_tensors(img_array):
-#     stack_array = np.stack(img_array)
-#     images_tensor = transforms.ToTensor()(stack_array).permute(1, 0, 2) # PyTorch takes in tensors of with this shape.
-#     print(images_tensor.shape)
-
-#     return images_tensor
 
 transform = transforms.ToTensor()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 
 def check_total_lables(filepaths):
     labels = []
@@ -114,14 +75,15 @@ class PretrainedModel(torch.nn.Module):
         return x
 
 class Trainer():
-    def __init__(self, model, batch_size, learning_rate, nb_epochs, image_filepaths, label_filepaths, data_limit, resize_shape):
+    def __init__(self, model, batch_size, learning_rate, nb_epochs, image_filepaths, label_filepaths, train_data_limit, test_data_limit, resize_shape):
         self.model = model
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.epochs = nb_epochs
         self.train_img_filepaths, self.val_img_filepaths, self.test_img_filepaths = image_filepaths
         self.train_label_filepaths, self.val_label_filepaths, self.test_label_filepaths = label_filepaths
-        self.data_limit = data_limit
+        self.train_data_limit = train_data_limit
+        self.test_data_limit = test_data_limit
         self.resize_shape = resize_shape
 
     def load_images(self, folder_path, limit, resize_shape):
@@ -177,7 +139,9 @@ class Trainer():
 
     def train(self):
         loss_func = torch.nn.BCELoss()
-        self.train_loader = self.preprocessor(self.train_img_filepaths, self.train_label_filepaths, self.data_limit, self.resize_shape)
+        self.train_loader = self.preprocessor(self.train_img_filepaths, 
+                                              self.train_label_filepaths, self.train_data_limit, self.resize_shape)
+
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate) # Maybe add in weight decay? Parameter to look into...
 
         for epoch in range(self.epochs):
@@ -202,11 +166,19 @@ class Trainer():
 
     def eval(self):
         self.model.eval()
+
         total_loss = 0
         correct_predictions = 0
         total_predictions = 0
+        expanded_predictions = []
+        expanded_labels = []
+        accuracy_skl, precision, recall, f1 = 0, 0, 0, 0
+
         loss_func = torch.nn.BCELoss()
-        self.test_loader = self.preprocessor(self.test_img_filepaths, self.test_label_filepaths, self.data_limit, self.resize_shape)
+        self.test_loader = self.preprocessor(self.test_img_filepaths, self.test_label_filepaths, 
+                                             self.test_data_limit, self.resize_shape)
+        
+        print(self.test_loader.batch_size, len(self.test_loader))
 
         with torch.no_grad():
             for batch_inputs, batch_labels in self.test_loader:
@@ -217,17 +189,29 @@ class Trainer():
                 outputs = outputs.squeeze(1)
                 predictions = torch.sigmoid(outputs) > 0.5 # We will set the threshold to be exactly at the center (THIS CAN BE TUNED!)
                 predictions = predictions.float()
-                
+
+                expanded_predictions.extend(predictions.cpu().numpy())
+                expanded_labels.extend(batch_labels.cpu().numpy())
+
+
                 loss = loss_func(predictions, batch_labels)
-                total_loss += loss.item()
-                correct_predictions += (predictions == batch_labels).sum().item()
+                total_loss += loss.item() * batch_inputs.size(0)
+                correct_predictions += (predictions == batch_labels).sum().item() # 1.0 Accuracy??? Concerning???
+
                 total_predictions += batch_labels.size(0)
+
+        print(expanded_labels)
 
         avg_loss = total_loss / len(self.test_loader.dataset)
         accuracy = correct_predictions / total_predictions
+
+        accuracy_skl = accuracy_score(expanded_labels, expanded_predictions)
+        precision = precision_score(expanded_labels, expanded_predictions)
+        recall = recall_score(expanded_labels, expanded_predictions)
+        f1 = f1_score(expanded_labels, expanded_predictions)
         # Can also look at false positives/false negatives and metrics like that
 
-        return accuracy, avg_loss
+        return accuracy, avg_loss, accuracy_skl, precision, recall, f1
 
 
 def main():
@@ -238,11 +222,13 @@ def main():
     img_filepaths = ["./data/train", "./data/val", "./data/test"]
 
     model = PretrainedModel(1)
+
     model = model.to(device)
-    trainer = Trainer(model, batch_size=32, learning_rate=0.001, nb_epochs=1, image_filepaths=img_filepaths, label_filepaths=label_filepaths, data_limit=3000, resize_shape=224)
+    trainer = Trainer(model, batch_size=32, learning_rate=0.001, nb_epochs=1, image_filepaths=img_filepaths, label_filepaths=label_filepaths, train_data_limit=5000, test_data_limit=5000, resize_shape=224)
     trainer.train()
-    accuracy, avg_loss = trainer.eval()
-    print(accuracy)    
+    accuracy, avg_loss, accuracy_skl, precision, recall, f1 = trainer.eval()
+    print(accuracy, avg_loss) 
+    print("Printing skl metrics, Accuracy: {}, Precision: {}, Recall: {}, F1: {} ".format(accuracy_skl, precision, recall, f1))   
 
     # negative, positive = check_total_lables(filepaths=filepaths)
     # print(negative, positive)
