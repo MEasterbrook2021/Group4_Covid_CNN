@@ -5,9 +5,7 @@ import pandas as pd
 from zipfile import ZipFile
 import os
 
-from .source import *
-from .data import *
-
+from src.data import *
 
 class CovidxDownloader:
     def __init__(self):
