@@ -1,6 +1,6 @@
 from src.data.source import *
 from src.data.download import CovidxDownloader
-from src.data.data import *
+from src.data import *
 from src.data import viz
 
 from pathlib import Path
