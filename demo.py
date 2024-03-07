@@ -3,6 +3,8 @@ from src.data import *
 from src.data import viz
 from src.model import *
 
+from torchsummary import summary
+
 from pathlib import Path
 import os
 from shutil import copy
@@ -15,7 +17,7 @@ IMAGE_SIZE = (128, 128)
 BATCH_SIZE_TRAIN = 10
 BATCH_SIZE_TEST = 10
 
-MODEL_TYPE = ModelTypes.RESNET
+MODEL_TYPE = ModelTypes.CUSTOM
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 10
 
@@ -69,11 +71,17 @@ def demo(limits):
     viz.show_examples(train_dataset, title="Training Examples (Standardized)", num_examples=5)
 
     print("___________________________________________________________________________________________________TRAINING")
+    # Get the device
+    device_name = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device(device_name)
+    print(f"Device: {device}")
+
     # Perform training
     if MODEL_TYPE == ModelTypes.RESNET:
         model = ResnetModel()
     elif MODEL_TYPE == ModelTypes.CUSTOM:
         model = CustomModel(IMAGE_SIZE)
+    summary(model, input_size=(1, IMAGE_SIZE[0], IMAGE_SIZE[1]), device=device_name)
 
 if __name__ == "__main__":
     demo((NUM_TRAIN, NUM_TEST, NUM_VAL))
