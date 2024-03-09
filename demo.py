@@ -2,8 +2,10 @@ from src.data.download import CovidxDownloader
 from src.data import *
 from src.data import viz
 from src.model import *
+from src.model.train import Trainer
 
 from torchsummary import summary
+from torch.utils.data import DataLoader
 
 from pathlib import Path
 import os
@@ -13,13 +15,18 @@ from shutil import copy
 STEPS = [
     # "download",
     # "viz",
+    "model",
     "train",
+    "valid",
     "eval",
+    "save",
+    "stats",
 ]
 
-NUM_TRAIN, NUM_TEST, NUM_VAL = 200, 200, 0
-
 IMGS_DIR = DataDir.PATH_RAW / Covidx_CXR2.TRAIN
+COPY_DEMO_FILES = False
+
+NUM_TRAIN, NUM_TEST, NUM_VAL = 50, 50, 50
 IMAGE_SIZE = (224, 224)
 BATCH_SIZE_TRAIN = 10
 BATCH_SIZE_TEST = 10
@@ -27,11 +34,15 @@ BATCH_SIZE_TEST = 10
 MODEL_TYPE = ModelTypes.RESNET
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 10
+EVAL_AFTER_EPOCHS = int(NUM_EPOCHS / 5)
+SAVE_AFTER_EPOCHS = NUM_EPOCHS
 
 
 def print_section_header(str: str):
-    print(f"{str.upper():_>110}")
+    print(f"\n{f" {str.upper()} ":═^120}")
 
+def print_info(str: str, val):
+    print(f"> {str}: {val}")
 
 def create_demo_annots(file: Path, output: Path, num, split=0.5):
     # Create the annotations file under data/demo/ based on data/raw/
@@ -43,59 +54,76 @@ def create_demo_annots(file: Path, output: Path, num, split=0.5):
     save_annotations_file(df, output)
     return df
 
+def copy_demo_files(df: pd.DataFrame, file_stem):
+    for _, row in df.iterrows():
+        img_filename = row["filename"]
+        dest = (DataDir.PATH_DEMO / file_stem) / img_filename
+        if not dest.parent.is_dir():
+            os.makedirs(dest.parent)
+        if not dest.is_file():
+            copy((DataDir.PATH_RAW / file_stem) / img_filename, dest.parent)
+
 
 def demo(limits):
     num_train, num_test, num_val = limits
 
     print_section_header("DATA LOADING")
-    files = list()
+    dfs = list()
     for af, num in zip(Covidx_CXR2.ANNOTATIONS_FILES, limits):
         # Create the demo annotations files and download the dataset if necessary
         demo_af = DataDir.PATH_DEMO / af
-        if "download" in STEPS:
-            if not demo_af.is_file():
-                if not DataDir.PATH_RAW.is_dir() or len(os.listdir(DataDir.PATH_RAW)) == 0:
-                    CovidxDownloader().download(DataDir.PATH_RAW)
-                df = create_demo_annots(file=DataDir.PATH_RAW / af, output=demo_af, num=num)
-            else:
-                df = read_annotations_file(demo_af)
-        
+        if not demo_af.is_file():
+            if "download" in STEPS and (not DataDir.PATH_RAW.is_dir() or len(os.listdir(DataDir.PATH_RAW)) == 0):
+                CovidxDownloader().download(DataDir.PATH_RAW)
+            df = create_demo_annots(file=DataDir.PATH_RAW / af, output=demo_af, num=num)
+        else:
+            df = read_annotations_file(demo_af)
         # Copy files to be used in the demo
-        # file_stem = Path(af).stem
-        # for _, row in df.iterrows():
-        #     img_filename = row["filename"]
-        #     dest = (DataDir.PATH_DEMO / file_stem) / img_filename
-        #     if not dest.parent.is_dir():
-        #         os.makedirs(dest.parent)
-        #     if not dest.is_file():
-        #         copy((DataDir.PATH_RAW / file_stem) / img_filename, dest.parent)
-        files.append(demo_af)
-    train_file, test_file, _ = tuple(files)
-    del files
-    print(f"Training examples: {num_train}")
-    print(f"Testing examples: {num_test}")
-    print(f"Validation examples: {num_val}")
+        if COPY_DEMO_FILES:
+            copy_demo_files(df, Path(af).stem)
+        dfs.append(df)
+    train_df, test_df, val_df = tuple(dfs)
+    del dfs
+    print_info("Training examples",   num_train)
+    print_info("Testing examples",    num_test)
+    print_info("Validation examples", num_val)
 
     # Load the training dataset and visualise some examples from each class
-    train_df = read_annotations_file(train_file)
     train_dataset = CovidxDataset(train_df, IMGS_DIR, image_size=IMAGE_SIZE)
     if "viz" in STEPS:
         print_section_header("visualization")
         viz.show_examples(train_dataset, title="Training Examples (Standardized)", num_examples=5)
 
-    print_section_header("training")
     # Get the device
     device_name = "cuda" if torch.cuda.is_available() else "cpu"
     device = torch.device(device_name)
-    print(f"Device: {device}")
+    if MODEL_TYPE == ModelTypes.RESNET:
+        model = ResnetModel()
+    elif MODEL_TYPE == ModelTypes.CUSTOM:
+        model = CustomModel(IMAGE_SIZE)
 
-    if "train" in STEPS:
-        # Perform training
-        if MODEL_TYPE == ModelTypes.RESNET:
-            model = ResnetModel()
-        elif MODEL_TYPE == ModelTypes.CUSTOM:
-            model = CustomModel(IMAGE_SIZE)
+    # Print stats and info about the model
+    if "model" in STEPS:
+        print_section_header("model")
+        print_info("Model", model)
+        print_info("Device", device)
         summary(model, input_size=(3, IMAGE_SIZE[0], IMAGE_SIZE[1]), device=device_name)
+    
+    # Perform training
+    if "train" in STEPS:
+        print_section_header("training")
+        train_dl = DataLoader(
+            train_dataset, 
+            batch_size=BATCH_SIZE_TRAIN, 
+            shuffle=True, 
+            pin_memory=(device_name=="cuda")
+        )
+        print_info("Total epochs", NUM_EPOCHS)
+        print_info("Training batch size", BATCH_SIZE_TRAIN)
+        trainer = Trainer(model, device, train_dl, LEARNING_RATE, NUM_EPOCHS)
+        trainer.train(NUM_EPOCHS)
+        print(f"Losses: {trainer.epoch_losses}")
+        
 
 if __name__ == "__main__":
     demo((NUM_TRAIN, NUM_TEST, NUM_VAL))

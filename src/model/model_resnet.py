@@ -10,7 +10,10 @@ class ResnetModel(torch.nn.Module):
         self.resnet = torchvision.models.resnet50(weights=torchvision.models.ResNet50_Weights.IMAGENET1K_V1) # Does not take in pretrained parameter anymore
 
         num_features = self.resnet.fc.in_features # Extracting number of input features from the fully connected layer in the resnet50.
-        self.resnet.fc = torch.nn.Linear(num_features, len(Covidx_CXR2.CLASSES))
+        self.resnet.fc = torch.nn.Linear(num_features, 1)
+
+    def __str__(self):
+        return "Adapted Resnet50 (Binary Classification)"
 
     def forward(self, x):
         x = self.resnet(x)

@@ -14,6 +14,9 @@ class CustomModel(torch.nn.Module):
         self.fc2 = CustomModel.FCLayer(1200, 100)
         self.fc3 = CustomModel.FCLayer(100, 1, torch.nn.Sigmoid())
 
+    def __str__(self):
+        return "Custom CNN Binary Classification Model"
+
     def forward(self, x):
         x = self.conv1(x)
         x = self.conv2(x)

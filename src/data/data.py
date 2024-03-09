@@ -22,7 +22,7 @@ class CovidxDataset(Dataset):
         self.img_transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Resize(image_size),
-            transforms.Grayscale(3),
+            transforms.Grayscale(num_output_channels=3),
         ])
         self.rng = rng
 
@@ -50,10 +50,10 @@ class CovidxDataset(Dataset):
     def __load_image(self, img_path):
         img = cv2.imread(str(img_path))
         img = self.img_transform(img)
-        # img = self.__normalise(img)
+        img = self.__standardize(img)
         return img
 
-    def __normalise(self, img):
+    def __standardize(self, img):
         mean = img.mean()
         std = img.std()
         norm = transforms.Normalize(mean=mean, std=std)
