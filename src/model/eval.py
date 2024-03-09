@@ -38,7 +38,7 @@ class Evaluator:
         
         self.model.eval()
         progress = tqdm(self.dl, total=len(self.dl), ncols=120)
-        progress.set_description(f"Loss: ... , Accuracy: ... ")
+        progress.set_description(f"[Tst] Loss: ... , Accuracy: ... ")
         with torch.no_grad():
             for i, (batch_inputs, batch_labels) in enumerate(progress, start=1):
                 batch_inputs = batch_inputs.to(self.device)
@@ -57,6 +57,6 @@ class Evaluator:
                 correct_preds += preds.eq(outputs.data.view_as(preds)).sum() / l_s
                 total_preds += l_s
 
-                progress.set_description(f"Loss: {self.loss_total / i :.4f}, Accuracy: {correct_preds / i :.4f} ")
+                progress.set_description(f"[Tst] Loss: {self.loss_total / i :.4f}, Accuracy: {correct_preds / i :.4f} ")
         
         self.accuracy = correct_preds / total_preds
