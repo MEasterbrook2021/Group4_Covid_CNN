@@ -2,3 +2,4 @@
 **/__pycache__/
 data/raw/
 data/demo/
+models/covidx-cxr2/

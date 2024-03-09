@@ -25,13 +25,13 @@ class Trainer:
         self.epoch_losses = list()
 
     def train(self, n_epochs=1):
-        print(f"Training {type(self.model).__name__} for {n_epochs} epoch{'s' if n_epochs > 1 else ''}...")
+        print(f"Training {type(self.model).__name__} for {n_epochs} epoch{'s' if n_epochs > 1 else ''}... ")
         # Set model to training mode
         self.model.train()
         while (self.epochs_elapsed < self.max_epochs) and (n_epochs > 0):
             total_loss = 0.0
             progress = tqdm(self.dl, total=len(self.dl), ncols=120)
-            progress.set_description(f"[Trn] Epoch {self.epochs_elapsed + 1}, Loss: ...")
+            progress.set_description(f"[Trn] Epoch {self.epochs_elapsed + 1}, Loss: ... ")
             for i, (batch_inputs, batch_labels) in enumerate(progress, start=1):
                 batch_inputs = batch_inputs.to(self.device)
                 batch_labels = batch_labels.to(self.device)
