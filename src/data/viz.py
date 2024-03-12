@@ -1,5 +1,6 @@
 from .dataset import CovidxDataset
 from .source import *
+from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
 
 def show_examples(dataset: CovidxDataset, title, num_examples):
@@ -33,3 +34,12 @@ def show_examples(dataset: CovidxDataset, title, num_examples):
         ax.imshow(img.squeeze().permute(1, 2, 0), cmap="gray")
 
     plt.show()
+
+
+def plot_loss(axis: Axes, train_losses, val_losses):
+    axis.set_title("Training and Validation Losses over Epochs")
+    axis.xaxis.set_label("Epoch")
+    axis.yaxis.set_label("Loss")
+    axis.plot(train_losses, label="Training")
+    axis.plot(val_losses, label="Validation")
+    axis.legend(loc="upper center", bbox_to_anchor=(0.5, 1.05), ncol=2, fancybox=True, shadow=True)

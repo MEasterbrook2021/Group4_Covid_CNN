@@ -7,6 +7,7 @@ from src.model.eval import Evaluator
 
 from torchsummary import summary
 from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
 
 from pathlib import Path
 import os
@@ -17,20 +18,20 @@ STEPS = [
     # "viz",
     "model",
     "train",
-    "valid",
+    # "valid",
     "eval",
-    "save",
     "stats",
+    # "save",
 ]
 
-NUM_TRAIN, NUM_TEST, NUM_VAL = 50, 500, 50
-IMAGE_SIZE = (224, 224)
-BATCH_SIZE_TRAIN = 10
-BATCH_SIZE_TEST = 10
+NUM_TRAIN, NUM_TEST, NUM_VAL = 10, 50, 50
+IMAGE_SIZE        = (224, 224)
+BATCH_SIZE_TRAIN  = 10
+BATCH_SIZE_TEST   = 10
 
-MODEL_TYPE = ModelTypes.RESNET
-LEARNING_RATE = 0.001
-NUM_EPOCHS = 1
+MODEL_TYPE        = ModelTypes.RESNET
+LEARNING_RATE     = 0.001
+NUM_EPOCHS        = 10
 EVAL_AFTER_EPOCHS = int(NUM_EPOCHS / 5)
 SAVE_AFTER_EPOCHS = NUM_EPOCHS
 
@@ -81,7 +82,6 @@ def demo(limits):
     # Load the training dataset and visualise some examples from each class
     train_dataset = CovidxDataset(train_df, DataDir.PATH_TRAIN, image_size=IMAGE_SIZE)
     if "viz" in STEPS:
-        print_section_header("visualization")
         viz.show_examples(train_dataset, title="Training Examples (Standardized)", num_examples=5)
 
     # Get the device
@@ -100,6 +100,7 @@ def demo(limits):
         summary(model, input_size=(3, IMAGE_SIZE[0], IMAGE_SIZE[1]), device=device_name)
     
     # Perform training
+    train_losses = []
     if "train" in STEPS:
         print_section_header("training")
         train_dl = DataLoader(
@@ -113,6 +114,7 @@ def demo(limits):
         trainer = Trainer(model, device, train_dl, LEARNING_RATE, NUM_EPOCHS)
         trainer.train(NUM_EPOCHS)
         print(f"Losses: {trainer.epoch_losses}")
+        train_losses = trainer.epoch_losses
     
     # Perform final evaluation
     if "eval" in STEPS:
@@ -126,6 +128,12 @@ def demo(limits):
         evaluator = Evaluator(model, device, test_dl)
         evaluator.eval()
         print(f"Accuracy: {evaluator.accuracy}")
+        
+    # Show some stats and graphs about the model
+    if "stats" in STEPS:
+        fig, axarr = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
+        viz.plot_loss(axarr[0, 0], train_losses, [])
+        plt.show()
     
     # Save the model
     if "save" in STEPS:
