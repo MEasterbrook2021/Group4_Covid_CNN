@@ -19,9 +19,12 @@ def show_examples(dataset: CovidxDataset, title, num_examples):
     ax.axis("off")
     for i in range(0, num_examples):
         img, _ = dataset.get_random(Covidx_CXR2.CLASS_POSITIVE)
+        img = img.squeeze().permute(1, 2, 0)
+        img = (img + 1.0) / 2.0
+        img = img.clamp(min=0.0, max=1.0)
         ax = pos_row[i + 1]
         ax.axis("off")
-        ax.imshow(img.squeeze().permute(1, 2, 0), cmap="gray")
+        ax.imshow(img)
 
     print(f"{num_examples} {Covidx_CXR2.CLASS_NEGATIVE} examples")
     ax = neg_row[0]
@@ -29,9 +32,12 @@ def show_examples(dataset: CovidxDataset, title, num_examples):
     ax.axis("off")
     for i in range(0, num_examples):
         img, _ = dataset.get_random(Covidx_CXR2.CLASS_NEGATIVE)
+        img = img.squeeze().permute(1, 2, 0)
+        img = (img + 1.0) / 2.0
+        img = img.clamp(min=0.0, max=1.0)
         ax = neg_row[i + 1]
         ax.axis("off")
-        ax.imshow(img.squeeze().permute(1, 2, 0), cmap="gray")
+        ax.imshow(img)
 
     plt.show()
 

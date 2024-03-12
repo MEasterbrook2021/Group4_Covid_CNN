@@ -15,7 +15,7 @@ import os
 
 STEPS = [
     "download",
-    # "viz",
+    "viz",
     "model",
     "train",
     # "valid",
@@ -24,14 +24,15 @@ STEPS = [
     # "save",
 ]
 
-NUM_TRAIN, NUM_TEST, NUM_VAL = 10, 50, 50
+NUM_TRAIN, NUM_TEST, NUM_VAL = 20, 50, 50
 IMAGE_SIZE        = (224, 224)
 BATCH_SIZE_TRAIN  = 10
 BATCH_SIZE_TEST   = 10
+AUGMENT_NOISE     = (0.0, 0.05)
 
 MODEL_TYPE        = ModelTypes.RESNET
 LEARNING_RATE     = 0.001
-NUM_EPOCHS        = 10
+NUM_EPOCHS        = 5
 EVAL_AFTER_EPOCHS = int(NUM_EPOCHS / 5)
 SAVE_AFTER_EPOCHS = NUM_EPOCHS
 
@@ -80,9 +81,9 @@ def demo(limits):
     print_info("Validation examples", num_val)
 
     # Load the training dataset and visualise some examples from each class
-    train_dataset = CovidxDataset(train_df, DataDir.PATH_TRAIN, image_size=IMAGE_SIZE)
+    train_dataset = CovidxDataset(train_df, DataDir.PATH_TRAIN, image_size=IMAGE_SIZE, noise=AUGMENT_NOISE)
     if "viz" in STEPS:
-        viz.show_examples(train_dataset, title="Training Examples (Standardized)", num_examples=5)
+        viz.show_examples(train_dataset, title="Training Examples (Normalized and Augmented)", num_examples=5)
 
     # Get the device
     device_name = "cuda" if torch.cuda.is_available() else "cpu"

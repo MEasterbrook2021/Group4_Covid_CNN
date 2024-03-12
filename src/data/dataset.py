@@ -6,25 +6,22 @@ from torchvision import transforms
 from torch.utils.data import Dataset
 import cv2
 import pandas as pd
+import numpy as np
 
 from pathlib import Path
 from random import Random
 
 
 class CovidxDataset(Dataset):
-    def __init__(self, annotations_file: Path, img_dir: Path, image_size, rng=Random()):
-        df = read_annotations_file(annotations_file)
-        self.__init__(df, img_dir, image_size, rng)
-
-    def __init__(self, dataframe: pd.DataFrame, img_dir: Path, image_size, rng=Random()):
+    def __init__(self, dataframe: pd.DataFrame, img_dir: Path, image_size, noise=None, normalize=True):
         self.df: pd.DataFrame = dataframe
         self.img_dir = img_dir
         self.img_transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Resize(image_size),
-            transforms.Grayscale(num_output_channels=3),
         ])
-        self.rng = rng
+        self.noise = noise
+        self.normalize = normalize
 
     def __len__(self):
         return len(self.df)
@@ -37,10 +34,12 @@ class CovidxDataset(Dataset):
         return self.__load_image(img_path), lbl
 
     def get_random(self) -> tuple[torch.Tensor, int]:
-        return self[self.rng.randint(0, len(self) - 1)]
+        return self[torch.randint(low=0, high=len(self), size=()).item()]
     
     def get_random(self, label: str) -> tuple[torch.Tensor, int]:
-        item = self.df[self.df.label == label].sample(1).iloc[0]
+        df = self.df[self.df.label == label]
+        i = torch.randint(low=0, high=df.shape[0], size=()).item()
+        item = df.iloc[i]
         img_filename = item["filename"]
         img_path = self.img_dir / img_filename
         lbl = item["label"]
@@ -48,12 +47,17 @@ class CovidxDataset(Dataset):
         return self.__load_image(img_path), lbl
     
     def __load_image(self, img_path):
-        img = cv2.imread(str(img_path))
+        img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
         img = self.img_transform(img)
-        img = self.__standardize(img)
+        if self.noise is not None:
+            (mean, std) = self.noise
+            img += torch.randn(img.shape) * std + mean
+        if self.normalize:
+            img = self.__normalize(img)
+        img = img.repeat((3, 1, 1))
         return img
 
-    def __standardize(self, img):
+    def __normalize(self, img):
         mean = img.mean()
         std = img.std()
         norm = transforms.Normalize(mean=mean, std=std)
