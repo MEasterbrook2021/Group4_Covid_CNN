@@ -1,9 +1,13 @@
 from pathlib import Path
 from urllib.parse import urlparse
-import kaggle
 import pandas as pd
 from zipfile import ZipFile
 import os
+import warnings
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    import kaggle
 
 from src.data import *
 

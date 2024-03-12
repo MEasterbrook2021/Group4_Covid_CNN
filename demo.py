@@ -15,25 +15,26 @@ import os
 
 STEPS = [
     "download",
-    "viz",
+    # "viz",
     "model",
     "train",
-    # "valid",
-    "eval",
+    "valid",
+    "test",
     "stats",
-    # "save",
+    "save",
 ]
+NUM_WORKERS = 0
 
-NUM_TRAIN, NUM_TEST, NUM_VAL = 20, 50, 50
+NUM_TRAIN, NUM_TEST, NUM_VAL = 50, 50, 50
 IMAGE_SIZE        = (224, 224)
 BATCH_SIZE_TRAIN  = 10
 BATCH_SIZE_TEST   = 10
-AUGMENT_NOISE     = (0.0, 0.05)
+AUGMENT_NOISE     = None # (0.0, 0.05)
 
 MODEL_TYPE        = ModelTypes.RESNET
-LEARNING_RATE     = 0.001
-NUM_EPOCHS        = 5
-EVAL_AFTER_EPOCHS = int(NUM_EPOCHS / 5)
+LEARNING_RATE     = 0.01
+NUM_EPOCHS        = 10
+VAL_AFTER_EPOCHS  = 1
 SAVE_AFTER_EPOCHS = NUM_EPOCHS
 
 
@@ -71,9 +72,10 @@ def demo(limits):
             if df.shape[0] != num:
                 os.remove(demo_af)
                 df = create_demo_annots(file=DataDir.PATH / af, output=demo_af, num=num)
-
         assert(df.shape[0] == num)
+        df = df.sample(frac=1).reset_index(drop=True)
         dfs.append(df)
+
     train_df, test_df, val_df = tuple(dfs)
     del dfs
     print_info("Training examples",   num_train)
@@ -92,6 +94,7 @@ def demo(limits):
         model = ResnetModel()
     elif MODEL_TYPE == ModelTypes.CUSTOM:
         model = CustomModel(IMAGE_SIZE)
+    model.to(device)
 
     # Print stats and info about the model
     if "model" in STEPS:
@@ -101,29 +104,40 @@ def demo(limits):
         summary(model, input_size=(3, IMAGE_SIZE[0], IMAGE_SIZE[1]), device=device_name)
     
     # Perform training
-    train_losses = []
+    train_losses, val_losses = [], []
     if "train" in STEPS:
         print_section_header("training")
         train_dl = DataLoader(
             train_dataset, 
             batch_size=BATCH_SIZE_TRAIN, 
             shuffle=True, 
-            pin_memory=(device_name=="cuda")
+            pin_memory=(device_name=="cuda"),
+            num_workers=NUM_WORKERS
+        )
+        val_dataset = CovidxDataset(val_df, DataDir.PATH_VAL, image_size=IMAGE_SIZE)
+        val_dl = DataLoader(
+            val_dataset,
+            batch_size=BATCH_SIZE_TRAIN,
+            shuffle=True,
+            pin_memory=(device_name=="cuda"),
+            num_workers=NUM_WORKERS
         )
         print_info("Total epochs", NUM_EPOCHS)
         print_info("Training batch size", BATCH_SIZE_TRAIN)
-        trainer = Trainer(model, device, train_dl, LEARNING_RATE, NUM_EPOCHS)
-        trainer.train(NUM_EPOCHS)
-        print(f"Losses: {trainer.epoch_losses}")
-        train_losses = trainer.epoch_losses
+        trainer = Trainer(model, device, train_dl, val_dl, LEARNING_RATE, NUM_EPOCHS, VAL_AFTER_EPOCHS)
+        trainer.train()
+            
+        train_losses = trainer.training_losses
+        val_losses = trainer.validation_losses
     
     # Perform final evaluation
-    if "eval" in STEPS:
-        print_section_header("evaluation")
+    if "test" in STEPS:
+        print_section_header("final evaluation")
         test_dataset = CovidxDataset(test_df, DataDir.PATH_TEST, image_size=IMAGE_SIZE)
         test_dl = DataLoader(
             test_dataset,
-            batch_size=BATCH_SIZE_TEST
+            batch_size=BATCH_SIZE_TEST,
+            num_workers=NUM_WORKERS
         )
         print_info("Testing batch size", BATCH_SIZE_TEST)
         evaluator = Evaluator(model, device, test_dl)
@@ -133,7 +147,7 @@ def demo(limits):
     # Show some stats and graphs about the model
     if "stats" in STEPS:
         fig, axarr = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
-        viz.plot_loss(axarr[0, 0], train_losses, [])
+        viz.plot_loss(axarr[0, 0], train_losses, val_losses)
         plt.show()
     
     # Save the model

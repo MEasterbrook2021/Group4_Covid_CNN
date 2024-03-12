@@ -47,12 +47,12 @@ class Evaluator:
 
                 # Calculate predictions
                 outputs = self.model(batch_inputs).squeeze(1)
-                preds = self.activation(outputs) > self.threshold
+                preds = outputs > self.threshold
                 preds = preds.float()
 
                 # Calculate loss
                 l_s = batch_labels.size(0)
-                loss = self.loss_func(preds, batch_labels.float())
+                loss = self.loss_func(outputs, batch_labels.float())
                 self.loss_total += loss.item() * l_s
 
                 # Update stats
