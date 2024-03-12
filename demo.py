@@ -62,7 +62,7 @@ def demo(limits):
         # Create the demo annotations files and download the dataset if necessary
         demo_af = DataDir.demo_file(DataDir.PATH / af)
         if not demo_af.is_file():
-            if "download" in STEPS and (not DataDir.PATH.is_dir() or len(os.listdir(DataDir.PATH)) == 0):
+            if "download" in STEPS:
                 CovidxDownloader().download(DataDir.PATH)
             df = create_demo_annots(file=DataDir.PATH / af, output=demo_af, num=num)
         else:
