@@ -5,9 +5,21 @@ import os
 from pathlib import Path
 
 class DataDir:
-    PATH = Path("data")
-    PATH_RAW = PATH / "raw"
-    PATH_DEMO = PATH / "demo"
+    PATH       = Path("data")
+    PATH_TRAIN = PATH / Covidx_CXR2.TRAIN
+    PATH_TEST  = PATH / Covidx_CXR2.TEST
+    PATH_VAL   = PATH / Covidx_CXR2.VAL
+    DEMO_PREF  = "demo"
+    SANIT_PREF = "sanit"
+
+    def prefix(path, prefix):
+        return path.parent / (f"{prefix}_{path.name}")
+
+    def demo_file(path):
+        return DataDir.prefix(path, DataDir.DEMO_PREF)
+    
+    def sanit_file(path):
+        return DataDir.prefix(path, DataDir.SANIT_PREF)
 
 def read_annotations_file(file: Path) -> pd.DataFrame:
     print(f"Reading {file}...")
@@ -19,4 +31,4 @@ def save_annotations_file(df: pd.DataFrame, path: Path):
         os.makedirs(path.parent)
     df.to_csv(path, sep=" ", index=False, header=None)
 
-from .data import *
+from .dataset import *

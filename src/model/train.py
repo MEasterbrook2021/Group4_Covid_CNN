@@ -29,7 +29,7 @@ class Trainer:
         # Set model to training mode
         self.model.train()
         while (self.epochs_elapsed < self.max_epochs) and (n_epochs > 0):
-            total_loss = 0.0
+            running_loss = 0.0
             progress = tqdm(self.dl, total=len(self.dl), ncols=120)
             progress.set_description(f"[Trn] Epoch {self.epochs_elapsed + 1}, Loss: ... ")
             for i, (batch_inputs, batch_labels) in enumerate(progress, start=1):
@@ -44,11 +44,12 @@ class Trainer:
                 loss.backward()
                 self.optimizer.step()
 
-                total_loss += loss.item()
+                running_loss += loss.item() * batch_inputs.size(0)
 
-                progress.set_description(f"[Trn] Epoch {self.epochs_elapsed + 1}, Loss: {total_loss/i:.4f}")
+                progress.set_description("[Trn] " + f"Epoch {self.epochs_elapsed + 1}, "
+                                                  + f"Loss: {running_loss / i:.4f}")
 
-            self.epoch_losses.append(total_loss / len(progress))
+            self.epoch_losses.append(running_loss / len(self.dl))
 
             self.epochs_elapsed += 1
             n_epochs -= 1

@@ -10,12 +10,11 @@ from torch.utils.data import DataLoader
 
 from pathlib import Path
 import os
-from shutil import copy
 
 
 STEPS = [
-    # "download",
-    # "viz",
+    "download",
+    "viz",
     "model",
     "train",
     "valid",
@@ -23,11 +22,6 @@ STEPS = [
     "save",
     "stats",
 ]
-
-TRAIN_IMGS_DIR = DataDir.PATH_RAW / Covidx_CXR2.TRAIN
-TEST_IMGS_DIR = DataDir.PATH_RAW / Covidx_CXR2.TEST
-VAL_IMGS_DIR = DataDir.PATH_RAW / Covidx_CXR2.VAL
-COPY_DEMO_FILES = False
 
 NUM_TRAIN, NUM_TEST, NUM_VAL = 50, 50, 50
 IMAGE_SIZE = (224, 224)
@@ -57,15 +51,6 @@ def create_demo_annots(file: Path, output: Path, num, split=0.5):
     save_annotations_file(df, output)
     return df
 
-def copy_demo_files(df: pd.DataFrame, file_stem):
-    for _, row in df.iterrows():
-        img_filename = row["filename"]
-        dest = (DataDir.PATH_DEMO / file_stem) / img_filename
-        if not dest.parent.is_dir():
-            os.makedirs(dest.parent)
-        if not dest.is_file():
-            copy((DataDir.PATH_RAW / file_stem) / img_filename, dest.parent)
-
 
 def demo(limits):
     num_train, num_test, num_val = limits
@@ -74,16 +59,18 @@ def demo(limits):
     dfs = list()
     for af, num in zip(Covidx_CXR2.ANNOTATIONS_FILES, limits):
         # Create the demo annotations files and download the dataset if necessary
-        demo_af = DataDir.PATH_DEMO / af
+        demo_af = DataDir.demo_file(DataDir.PATH / af)
         if not demo_af.is_file():
-            if "download" in STEPS and (not DataDir.PATH_RAW.is_dir() or len(os.listdir(DataDir.PATH_RAW)) == 0):
-                CovidxDownloader().download(DataDir.PATH_RAW)
-            df = create_demo_annots(file=DataDir.PATH_RAW / af, output=demo_af, num=num)
+            if "download" in STEPS and (not DataDir.PATH.is_dir() or len(os.listdir(DataDir.PATH)) == 0):
+                CovidxDownloader().download(DataDir.PATH)
+            df = create_demo_annots(file=DataDir.PATH / af, output=demo_af, num=num)
         else:
             df = read_annotations_file(demo_af)
-        # Copy files to be used in the demo
-        if COPY_DEMO_FILES:
-            copy_demo_files(df, Path(af).stem)
+            if df.shape[0] != num:
+                os.remove(demo_af)
+                df = create_demo_annots(file=DataDir.PATH / af, output=demo_af, num=num)
+
+        assert(df.shape[0] == num)
         dfs.append(df)
     train_df, test_df, val_df = tuple(dfs)
     del dfs
@@ -92,7 +79,7 @@ def demo(limits):
     print_info("Validation examples", num_val)
 
     # Load the training dataset and visualise some examples from each class
-    train_dataset = CovidxDataset(train_df, TRAIN_IMGS_DIR, image_size=IMAGE_SIZE)
+    train_dataset = CovidxDataset(train_df, DataDir.PATH_TRAIN, image_size=IMAGE_SIZE)
     if "viz" in STEPS:
         print_section_header("visualization")
         viz.show_examples(train_dataset, title="Training Examples (Standardized)", num_examples=5)
@@ -130,7 +117,7 @@ def demo(limits):
     # Perform final evaluation
     if "eval" in STEPS:
         print_section_header("evaluation")
-        test_dataset = CovidxDataset(test_df, TEST_IMGS_DIR, image_size=IMAGE_SIZE)
+        test_dataset = CovidxDataset(test_df, DataDir.PATH_TEST, image_size=IMAGE_SIZE)
         test_dl = DataLoader(
             test_dataset,
             batch_size=BATCH_SIZE_TEST
@@ -143,13 +130,14 @@ def demo(limits):
     # Save the model
     if "save" in STEPS:
         print_section_header("saving")
+        out = ModelDir.PATH_OUTPUT / f"{Covidx_CXR2.NAME}-{MODEL_TYPE.value}-{NUM_EPOCHS}epochs.pt"
+        print("Saving model to ")
         if not ModelDir.PATH_OUTPUT.is_dir():
             os.makedirs(ModelDir.PATH_OUTPUT)
-        torch.save(
-            model.state_dict(),
-            ModelDir.PATH_OUTPUT / 
-                f"{Covidx_CXR2.NAME}-{MODEL_TYPE.value}-{NUM_EPOCHS}epochs.pt"
-        )
+        torch.save(model.state_dict(), out)
+        print("Saved!")
+
+    print_section_header("finished")
 
 
 if __name__ == "__main__":

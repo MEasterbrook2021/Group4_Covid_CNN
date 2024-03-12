@@ -1,5 +1,4 @@
 .vscode/
 **/__pycache__/
-data/raw/
-data/demo/
-models/covidx-cxr2/
+/data
+/models

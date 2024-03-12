@@ -1,4 +1,4 @@
-from .data import CovidxDataset
+from .dataset import CovidxDataset
 from .source import *
 import matplotlib.pyplot as plt
 

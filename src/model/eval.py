@@ -22,8 +22,8 @@ class Evaluator:
         self.reset_stats()
 
     def reset_stats(self):
-        self.loss_avg = 0.0
-        self.loss_total = 0.0
+        self.loss_avg = 0.0   # Average loss across batches
+        self.loss_total = 0.0 # Total loss through one run of the dataset
         self.accuracy = 0.0
         self.precision = 0.0
         self.recall = 0.0
@@ -39,24 +39,28 @@ class Evaluator:
         self.model.eval()
         progress = tqdm(self.dl, total=len(self.dl), ncols=120)
         progress.set_description(f"[Tst] Loss: ... , Accuracy: ... ")
+
         with torch.no_grad():
             for i, (batch_inputs, batch_labels) in enumerate(progress, start=1):
                 batch_inputs = batch_inputs.to(self.device)
                 batch_labels = batch_labels.to(self.device)
 
-                outputs = self.model(batch_inputs)
-                outputs = outputs.squeeze(1)
-
+                # Calculate predictions
+                outputs = self.model(batch_inputs).squeeze(1)
                 preds = self.activation(outputs) > self.threshold
                 preds = preds.float()
 
+                # Calculate loss
                 l_s = batch_labels.size(0)
-
                 loss = self.loss_func(preds, batch_labels.float())
-                self.loss_total += loss.item() / l_s
-                correct_preds += preds.eq(outputs.data.view_as(preds)).sum() / l_s
+                self.loss_total += loss.item() * l_s
+
+                # Update stats
+                correct_preds += torch.eq(preds, batch_labels).sum().item()
                 total_preds += l_s
 
-                progress.set_description(f"[Tst] Loss: {self.loss_total / i :.4f}, Accuracy: {correct_preds / i :.4f} ")
+                progress.set_description(f"[Tst] " + f"Loss: {self.loss_total / total_preds :.4f}, "
+                                                   + f"Accuracy: {correct_preds / total_preds :.4f} ")
         
         self.accuracy = correct_preds / total_preds
+        self.loss_avg /= total_preds

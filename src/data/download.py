@@ -23,7 +23,7 @@ class CovidxDownloader:
         self.dataset_id = Kaggle.dataset_id(self.dataset_author, self.dataset_name)
         kaggle.api.authenticate()
 
-    def download(self, download_dir=DataDir.PATH_RAW):
+    def download(self, download_dir=DataDir.PATH):
         if not download_dir.is_dir() or len(os.listdir(download_dir)) == 0:
             print("--- DOWNLOADING DATASET")
             kaggle.api.dataset_download_files(
