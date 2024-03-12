@@ -14,7 +14,7 @@ import os
 
 STEPS = [
     "download",
-    "viz",
+    # "viz",
     "model",
     "train",
     "valid",
@@ -23,7 +23,7 @@ STEPS = [
     "stats",
 ]
 
-NUM_TRAIN, NUM_TEST, NUM_VAL = 50, 50, 50
+NUM_TRAIN, NUM_TEST, NUM_VAL = 50, 500, 50
 IMAGE_SIZE = (224, 224)
 BATCH_SIZE_TRAIN = 10
 BATCH_SIZE_TEST = 10
@@ -130,8 +130,14 @@ def demo(limits):
     # Save the model
     if "save" in STEPS:
         print_section_header("saving")
-        out = ModelDir.PATH_OUTPUT / f"{Covidx_CXR2.NAME}-{MODEL_TYPE.value}-{NUM_EPOCHS}epochs.pt"
-        print("Saving model to ")
+        out_pref = f"{Covidx_CXR2.NAME}-{MODEL_TYPE.value}-{NUM_EPOCHS}epochs"
+        max_ver = 0
+        for file in Path(ModelDir.PATH_OUTPUT).glob(f"{out_pref}-*.pt"):
+            ver = abs(int(file.stem.split("-")[-1]))
+            if ver > max_ver:
+                max_ver = ver
+        out = ModelDir.PATH_OUTPUT / f"{out_pref}-{max_ver + 1:04d}.pt"
+        print(f"Saving model to {out}...")
         if not ModelDir.PATH_OUTPUT.is_dir():
             os.makedirs(ModelDir.PATH_OUTPUT)
         torch.save(model.state_dict(), out)
