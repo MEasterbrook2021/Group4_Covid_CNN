@@ -20,22 +20,26 @@ STEPS = [
     "model",
     "train",
     "valid",
+    # "save",
     "test",
     "stats",
     "tune",
     "save",
 ]
 NUM_WORKERS = 0
+LOAD_MODEL_NAME = "covidx-cxr2-resnet-10epochs-0003"
 
 NUM_TRAIN, NUM_TEST, NUM_VAL = 50, 50, 50
 IMAGE_SIZE        = (224, 224)
 BATCH_SIZE_TRAIN  = 10
 BATCH_SIZE_TEST   = 10
-AUGMENT_NOISE     = None # (0.0, 0.05)
+AUGMENT_NOISE     = (0.0, 0.01)
+THRESHOLD         = 0.5
 
 MODEL_TYPE        = ModelTypes.RESNET
+FREEZE            = True
 LEARNING_RATE     = 0.01
-NUM_EPOCHS        = 10
+NUM_EPOCHS        = 3
 VAL_AFTER_EPOCHS  = 1
 SAVE_AFTER_EPOCHS = NUM_EPOCHS
 
@@ -95,9 +99,13 @@ def demo(limits):
     device_name = "cuda" if torch.cuda.is_available() else "cpu"
     device = torch.device(device_name)
     if MODEL_TYPE == ModelTypes.RESNET:
-        model = ResnetModel()
+        model = ResnetModel(freeze_layers=FREEZE)
     elif MODEL_TYPE == ModelTypes.CUSTOM:
         model = CustomModel(IMAGE_SIZE)
+    if "train" not in STEPS:
+        model_path = ModelDir.PATH_OUTPUT / f"{LOAD_MODEL_NAME}.pt"
+        state_dict = torch.load(model_path)
+        model.load_state_dict(state_dict)
     model.to(device)
 
     # Print stats and info about the model
@@ -108,7 +116,7 @@ def demo(limits):
         summary(model, input_size=(3, IMAGE_SIZE[0], IMAGE_SIZE[1]), device=device_name)
     
     # Perform training
-    train_losses, val_losses = [], []
+    train_losses, val_losses = None, None
     if "train" in STEPS:
         print_section_header("training")
         train_dl = DataLoader(
@@ -128,7 +136,11 @@ def demo(limits):
         )
         print_info("Total epochs", NUM_EPOCHS)
         print_info("Training batch size", BATCH_SIZE_TRAIN)
-        trainer = Trainer(model, device, train_dl, val_dl, LEARNING_RATE, NUM_EPOCHS, VAL_AFTER_EPOCHS)
+        trainer = Trainer(
+            model, device, 
+            train_dl, val_dl,
+            LEARNING_RATE, NUM_EPOCHS, VAL_AFTER_EPOCHS if "valid" in STEPS else None
+        )
         trainer.train()
             
         train_losses = trainer.training_losses
@@ -178,6 +190,26 @@ def demo(limits):
             os.makedirs(ModelDir.PATH_OUTPUT)
         torch.save(model.state_dict(), out)
         print("Saved!")
+    
+    # Perform final evaluation
+    if "test" in STEPS:
+        print_section_header("final evaluation")
+        test_dataset = CovidxDataset(test_df, DataDir.PATH_TEST, image_size=IMAGE_SIZE)
+        test_dl = DataLoader(
+            test_dataset,
+            batch_size=BATCH_SIZE_TEST,
+            num_workers=NUM_WORKERS
+        )
+        print_info("Testing batch size", BATCH_SIZE_TEST)
+        evaluator = Evaluator(model, device, test_dl, threshold=THRESHOLD)
+        evaluator.eval()
+        evaluator.print_stats()
+        
+        # Show some stats and graphs about the model
+        if "stats" in STEPS:
+            fig, axarr = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
+            viz.plot_loss(axarr[0, 0], train_losses, val_losses)
+            plt.show()
 
     print_section_header("finished")
 

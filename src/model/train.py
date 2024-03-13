@@ -1,6 +1,8 @@
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import time
+from datetime import timedelta
 
 class Trainer:
 
@@ -27,6 +29,7 @@ class Trainer:
         self.validate_after_epochs = validate_after_epochs
         self.epochs_elapsed = 0
         self.finished = False
+        self.training_time = 0.0
 
         self.training_losses   = list()
         self.validation_losses = list()
@@ -38,9 +41,10 @@ class Trainer:
         print(f"Training {type(self.model).__name__} for {n_epochs} epoch{'s' if n_epochs > 1 else ''}... ")
         # Set model to training mode
         self.model.train()
+
+        time_start = time.time()
         while (self.epochs_elapsed < self.max_epochs) and (n_epochs > 0):
             running_loss = 0.0
-            examples_count = 0
             progress = tqdm(self.t_dl, total=len(self.t_dl), ncols=120)
             progress.set_description(f"[Trn] Epoch {self.epochs_elapsed + 1}, Loss: ... ")
             for i, (batch_inputs, batch_labels) in enumerate(progress, start=1):
@@ -60,12 +64,10 @@ class Trainer:
                 running_loss += loss.item() * l_s
 
                 # Update stats
-                examples_count += l_s
-
                 progress.set_description("[Trn] " + f"Epoch {self.epochs_elapsed + 1}, "
-                                                  + f"Loss: {running_loss / examples_count:.4f}")
+                                                  + f"Loss: {running_loss / i:.4f}")
 
-            self.training_losses.append((self.epochs_elapsed + 1, running_loss / examples_count))
+            self.training_losses.append((self.epochs_elapsed + 1, running_loss / len(self.t_dl)))
 
             new_elapsed = self.epochs_elapsed + 1
 
@@ -75,14 +77,16 @@ class Trainer:
             n_epochs -= 1
             self.epochs_elapsed = new_elapsed
 
+        self.training_time += time.time() - time_start
+
         if self.epochs_elapsed == self.max_epochs:
             self.finished = True
+            print(f"Training took [{timedelta(seconds=self.training_time)}] in total.")
 
     def validation(self):
         self.model.eval()
         with torch.no_grad():
             running_loss = 0.0
-            examples_count = 0
             progress = tqdm(self.v_dl, total=len(self.v_dl), ncols=120)
             progress.set_description(f"[Val] Epoch {self.epochs_elapsed + 1}, Loss: ... ")
             for i, (batch_inputs, batch_labels) in enumerate(progress, start=1):
@@ -99,9 +103,8 @@ class Trainer:
                 running_loss += loss.item() * l_s
 
                 # Update stats
-                examples_count += l_s
                 progress.set_description("[Val] " + f"Epoch {self.epochs_elapsed + 1}, "
-                                                  + f"Loss: {running_loss / examples_count:.4f}")
+                                                  + f"Loss: {running_loss / i:.4f}")
 
-            self.validation_losses.append((self.epochs_elapsed + 1, running_loss / examples_count))
+            self.validation_losses.append((self.epochs_elapsed + 1, running_loss / len(self.v_dl)))
         self.model.train()
