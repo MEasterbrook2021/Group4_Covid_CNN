@@ -4,6 +4,7 @@ from src.data import viz
 from src.model import *
 from src.model.train import Trainer
 from src.model.eval import Evaluator
+from src.model.hyperparameter import TuneHyperparameters
 
 from torchsummary import summary
 from torch.utils.data import DataLoader
@@ -21,6 +22,7 @@ STEPS = [
     "valid",
     "test",
     "stats",
+    "tune",
     "save",
 ]
 NUM_WORKERS = 0
@@ -39,7 +41,9 @@ SAVE_AFTER_EPOCHS = NUM_EPOCHS
 
 
 def print_section_header(str: str):
-    print(f"\n{f" {str.upper()} ":═^120}")
+    # print(f"\n{f" {str.upper()} ":═^120}")
+    print(f"\n{' ' + str.upper() + '':═^120}")
+
 
 def print_info(str: str, val):
     print(f"> {str}: {val}")
@@ -149,6 +153,15 @@ def demo(limits):
         fig, axarr = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
         viz.plot_loss(axarr[0, 0], train_losses, val_losses)
         plt.show()
+
+    if "tune" in STEPS:
+        params_to_tune = {"learning_rate" : [0.001, 0.002, 0.005, 0.01],
+                          "epochs" : [5, 10, 20, 40],
+                          "thresholds" : [0.48, 0.49, 0.50, 0.51, 0.52]}
+        
+        tuner = TuneHyperparameters(model, device, train_dl, val_dl, params_to_tune)
+        best_params = tuner.tune()
+        print(f"Best parameters: {best_params}")
     
     # Save the model
     if "save" in STEPS:

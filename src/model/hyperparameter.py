@@ -7,22 +7,21 @@ class TuneHyperparameters:
     def __init__(self,
                  model: torch.nn.Module,
                  device: torch.device,
+                 train_dataloader: DataLoader,
                  val_dataloader: DataLoader,
-                 test_dataloader: DataLoader,
-                 activation: torch.sigmoid,
+                #  activation: torch.sigmoid,
                  params_to_tune: dict,
-                 threshold: float,
+                #  threshold: float,
                 ):
             
         self.model = model
         self.device = device
         self.val_dl = val_dataloader
-        self.test_dl = test_dataloader
+        self.train_dl = train_dataloader
         self.params_to_tune = params_to_tune
-        self.threshold = threshold
+        # self.threshold = threshold # Probably won't need this as it will be set in the hyperparameter loop
         self.loss_func = torch.nn.BCELoss()
-        self.activation = activation
-        self.threshold = threshold
+        # self.activation = activation
 
         self.epochs_elapsed = 0
         self.finished = False
@@ -54,7 +53,7 @@ class TuneHyperparameters:
             running_loss = 0.0
             examples_count = 0.0
 
-            progress = tqdm(self.test_dl, total=len(self.test_dl), ncols=120)
+            progress = tqdm(self.train_dl, total=len(self.train_dl), ncols=120)
             progress.set_description(f"[Evl] Epoch {self.epochs_elapsed+1}, Loss: ... ")
 
             for i, (batch_inputs, batch_labels) in enumerate(progress, start=1):
@@ -112,9 +111,11 @@ class TuneHyperparameters:
                         self.best_accuracy = accuracy
                         self.best_model = self.model
                         self.best_params = {'learning rate' : self.learning_rate, 'nb_epochs' : self.max_epochs, 'threshold' : self.threshold}
-                        
+
         print(f"Best validation accuracy: {self.best_accuracy}")
         print(f"Best parameters: {self.best_params}")
+
+        return self.best_params
 
     def evaluate(self):
 
@@ -153,13 +154,3 @@ class TuneHyperparameters:
         self.loss_avg /= total_preds
 
         return self.accuracy
-
-       
-    
-
-                    
-
-
-
-
-    
