@@ -17,7 +17,7 @@ STEPS = [
     "download",
     # "viz",
     "model",
-    # "train",
+    "train",
     "valid",
     # "save",
     "test",
