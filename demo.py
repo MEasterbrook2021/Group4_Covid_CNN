@@ -7,6 +7,7 @@ from src.model.eval import Evaluator
 
 from torchsummary import summary
 from torch.utils.data import DataLoader
+import matplotlib.pyplot as plt
 
 from pathlib import Path
 import os
@@ -18,20 +19,25 @@ STEPS = [
     "model",
     "train",
     "valid",
-    "eval",
-    "save",
+    # "save",
+    "test",
     "stats",
 ]
+NUM_WORKERS = 0
+LOAD_MODEL_NAME = "covidx-cxr2-resnet-10epochs-0003"
 
-NUM_TRAIN, NUM_TEST, NUM_VAL = 50, 500, 50
-IMAGE_SIZE = (224, 224)
-BATCH_SIZE_TRAIN = 10
-BATCH_SIZE_TEST = 10
+NUM_TRAIN, NUM_TEST, NUM_VAL = 50, 50, 50
+IMAGE_SIZE        = (224, 224)
+BATCH_SIZE_TRAIN  = 10
+BATCH_SIZE_TEST   = 10
+AUGMENT_NOISE     = (0.0, 0.01)
+THRESHOLD         = 0.5
 
-MODEL_TYPE = ModelTypes.RESNET
-LEARNING_RATE = 0.001
-NUM_EPOCHS = 1
-EVAL_AFTER_EPOCHS = int(NUM_EPOCHS / 5)
+MODEL_TYPE        = ModelTypes.RESNET
+FREEZE            = True
+LEARNING_RATE     = 0.01
+NUM_EPOCHS        = 3
+VAL_AFTER_EPOCHS  = 1
 SAVE_AFTER_EPOCHS = NUM_EPOCHS
 
 
@@ -61,7 +67,7 @@ def demo(limits):
         # Create the demo annotations files and download the dataset if necessary
         demo_af = DataDir.demo_file(DataDir.PATH / af)
         if not demo_af.is_file():
-            if "download" in STEPS and (not DataDir.PATH.is_dir() or len(os.listdir(DataDir.PATH)) == 0):
+            if "download" in STEPS:
                 CovidxDownloader().download(DataDir.PATH)
             df = create_demo_annots(file=DataDir.PATH / af, output=demo_af, num=num)
         else:
@@ -69,9 +75,10 @@ def demo(limits):
             if df.shape[0] != num:
                 os.remove(demo_af)
                 df = create_demo_annots(file=DataDir.PATH / af, output=demo_af, num=num)
-
         assert(df.shape[0] == num)
+        df = df.sample(frac=1).reset_index(drop=True)
         dfs.append(df)
+
     train_df, test_df, val_df = tuple(dfs)
     del dfs
     print_info("Training examples",   num_train)
@@ -79,18 +86,22 @@ def demo(limits):
     print_info("Validation examples", num_val)
 
     # Load the training dataset and visualise some examples from each class
-    train_dataset = CovidxDataset(train_df, DataDir.PATH_TRAIN, image_size=IMAGE_SIZE)
+    train_dataset = CovidxDataset(train_df, DataDir.PATH_TRAIN, image_size=IMAGE_SIZE, noise=AUGMENT_NOISE)
     if "viz" in STEPS:
-        print_section_header("visualization")
-        viz.show_examples(train_dataset, title="Training Examples (Standardized)", num_examples=5)
+        viz.show_examples(train_dataset, title="Training Examples (Normalized and Augmented)", num_examples=5)
 
     # Get the device
     device_name = "cuda" if torch.cuda.is_available() else "cpu"
     device = torch.device(device_name)
     if MODEL_TYPE == ModelTypes.RESNET:
-        model = ResnetModel()
+        model = ResnetModel(freeze_layers=FREEZE)
     elif MODEL_TYPE == ModelTypes.CUSTOM:
         model = CustomModel(IMAGE_SIZE)
+    if "train" not in STEPS:
+        model_path = ModelDir.PATH_OUTPUT / f"{LOAD_MODEL_NAME}.pt"
+        state_dict = torch.load(model_path)
+        model.load_state_dict(state_dict)
+    model.to(device)
 
     # Print stats and info about the model
     if "model" in STEPS:
@@ -100,32 +111,35 @@ def demo(limits):
         summary(model, input_size=(3, IMAGE_SIZE[0], IMAGE_SIZE[1]), device=device_name)
     
     # Perform training
+    train_losses, val_losses = None, None
     if "train" in STEPS:
         print_section_header("training")
         train_dl = DataLoader(
             train_dataset, 
             batch_size=BATCH_SIZE_TRAIN, 
             shuffle=True, 
-            pin_memory=(device_name=="cuda")
+            pin_memory=(device_name=="cuda"),
+            num_workers=NUM_WORKERS
+        )
+        val_dataset = CovidxDataset(val_df, DataDir.PATH_VAL, image_size=IMAGE_SIZE)
+        val_dl = DataLoader(
+            val_dataset,
+            batch_size=BATCH_SIZE_TRAIN,
+            shuffle=True,
+            pin_memory=(device_name=="cuda"),
+            num_workers=NUM_WORKERS
         )
         print_info("Total epochs", NUM_EPOCHS)
         print_info("Training batch size", BATCH_SIZE_TRAIN)
-        trainer = Trainer(model, device, train_dl, LEARNING_RATE, NUM_EPOCHS)
-        trainer.train(NUM_EPOCHS)
-        print(f"Losses: {trainer.epoch_losses}")
-    
-    # Perform final evaluation
-    if "eval" in STEPS:
-        print_section_header("evaluation")
-        test_dataset = CovidxDataset(test_df, DataDir.PATH_TEST, image_size=IMAGE_SIZE)
-        test_dl = DataLoader(
-            test_dataset,
-            batch_size=BATCH_SIZE_TEST
+        trainer = Trainer(
+            model, device, 
+            train_dl, val_dl,
+            LEARNING_RATE, NUM_EPOCHS, VAL_AFTER_EPOCHS if "valid" in STEPS else None
         )
-        print_info("Testing batch size", BATCH_SIZE_TEST)
-        evaluator = Evaluator(model, device, test_dl)
-        evaluator.eval()
-        print(f"Accuracy: {evaluator.accuracy}")
+        trainer.train()
+            
+        train_losses = trainer.training_losses
+        val_losses = trainer.validation_losses
     
     # Save the model
     if "save" in STEPS:
@@ -142,6 +156,26 @@ def demo(limits):
             os.makedirs(ModelDir.PATH_OUTPUT)
         torch.save(model.state_dict(), out)
         print("Saved!")
+    
+    # Perform final evaluation
+    if "test" in STEPS:
+        print_section_header("final evaluation")
+        test_dataset = CovidxDataset(test_df, DataDir.PATH_TEST, image_size=IMAGE_SIZE)
+        test_dl = DataLoader(
+            test_dataset,
+            batch_size=BATCH_SIZE_TEST,
+            num_workers=NUM_WORKERS
+        )
+        print_info("Testing batch size", BATCH_SIZE_TEST)
+        evaluator = Evaluator(model, device, test_dl, threshold=THRESHOLD)
+        evaluator.eval()
+        evaluator.print_stats()
+        
+        # Show some stats and graphs about the model
+        if "stats" in STEPS:
+            fig, axarr = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
+            viz.plot_loss(axarr[0, 0], train_losses, val_losses)
+            plt.show()
 
     print_section_header("finished")
 
