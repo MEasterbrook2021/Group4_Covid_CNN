@@ -17,7 +17,7 @@ STEPS = [
     "download",
     # "viz",
     "model",
-    "train",
+    # "train",
     "valid",
     # "save",
     "test",
@@ -31,7 +31,7 @@ IMAGE_SIZE        = (224, 224)
 BATCH_SIZE_TRAIN  = 10
 BATCH_SIZE_TEST   = 10
 AUGMENT_NOISE     = (0.0, 0.01)
-THRESHOLD         = 0.5
+THRESHOLD         = 0.75
 
 MODEL_TYPE        = ModelTypes.RESNET
 FREEZE            = True
@@ -173,8 +173,14 @@ def demo(limits):
         
         # Show some stats and graphs about the model
         if "stats" in STEPS:
-            fig, axarr = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
+            fig, axarr = plt.subplots(nrows=2, ncols=2, figsize=(10, 8))
             viz.plot_loss(axarr[0, 0], train_losses, val_losses)
+            (fpr, tpr, _) = evaluator.roc
+            viz.plot_roc(axarr[1, 0], fpr, tpr)
+            viz.plot_confusion(axarr[0, 1], evaluator.confusion)
+            viz.plot_stats(axarr[1, 1], 
+                evaluator.loss_avg, evaluator.accuracy, evaluator.precision, evaluator.recall, evaluator.f1
+            )
             plt.show()
 
     print_section_header("finished")

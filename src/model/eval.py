@@ -85,6 +85,6 @@ class Evaluator:
             self.recall    = recall_score(true_labels, pred_labels)
             self.f1        = f1_score(true_labels, pred_labels)
             self.confusion = confusion_matrix(true_labels, pred_labels)
-            # self.roc       = roc_curve(true_labels, pred_probs)
+            self.roc       = roc_curve(true_labels, pred_probs)
 
         self.loss_avg /= len(self.tr_dl)
