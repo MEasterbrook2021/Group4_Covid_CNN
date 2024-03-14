@@ -24,13 +24,13 @@ STEPS = [
     "save",
     "test",
     "stats",
-    "tune",
+    # "tune",
     "save",
 ]
 NUM_WORKERS = 4
 LOAD_MODEL_NAME = "covidx-cxr2-resnet-20epochs-0003"
 
-NUM_TRAIN, NUM_TEST, NUM_VAL = 20_000, 10_000, 5_000
+NUM_TRAIN, NUM_TEST, NUM_VAL = 20_000, 8_000, 8_000
 USE_SANITISED     = True
 IMAGE_SIZE        = (224, 224)
 BATCH_SIZE_TRAIN  = 32
@@ -40,8 +40,8 @@ THRESHOLD         = 0.5
 
 MODEL_TYPE        = ModelTypes.RESNET
 FREEZE            = True
-LEARNING_RATE     = 0.01
-NUM_EPOCHS        = 20
+LEARNING_RATE     = 0.001
+NUM_EPOCHS        = 25
 VAL_AFTER_EPOCHS  = 1
 SAVE_AFTER_EPOCHS = NUM_EPOCHS
 
@@ -193,12 +193,6 @@ def demo(limits):
         evaluator = Evaluator(model, device, test_dl)
         evaluator.eval()
         print(f"Accuracy: {evaluator.accuracy}")
-        
-    # Show some stats and graphs about the model
-    if "stats" in STEPS:
-        fig, axarr = plt.subplots(nrows=2, ncols=2, figsize=(10, 5))
-        viz.plot_loss(axarr[0, 0], train_losses, val_losses)
-        plt.show()
 
     if "tune" in STEPS:
         params_to_tune = {"learning_rate" : [0.001, 0.002, 0.005, 0.01],
