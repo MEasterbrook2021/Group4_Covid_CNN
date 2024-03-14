@@ -10,7 +10,7 @@ class DataDir:
     PATH_TEST  = PATH / Covidx_CXR2.TEST
     PATH_VAL   = PATH / Covidx_CXR2.VAL
     DEMO_PREF  = "demo"
-    SANIT_PREF = "sanit"
+    SANIT_PREF = "s"
 
     def prefix(path, prefix):
         return path.parent / (f"{prefix}_{path.name}")

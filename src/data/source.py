@@ -25,7 +25,7 @@ class Covidx_CXR2:
     TEST = "test"
     VAL = "val"
     
-    ANNOTATIONS_FILES = [f"{s}.txt" for s in [TRAIN, TEST, VAL]]
+    ANNOTATIONS_FILES       = [f"{s}.txt" for s in [TRAIN, TEST, VAL]]
     COLUMNS = ["patient_id", "filename", "label", "data_source"]
     CLASS_POSITIVE = "positive"
     CLASS_NEGATIVE = "negative"

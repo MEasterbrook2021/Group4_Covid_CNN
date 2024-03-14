@@ -12,34 +12,36 @@ import matplotlib.pyplot as plt
 
 from pathlib import Path
 import os
+import math
 
 
 STEPS = [
     "download",
     # "viz",
     "model",
-    # "train",
+    "train",
     "valid",
-    # "save",
+    "save",
     "test",
     "stats",
     "tune",
     "save",
 ]
-NUM_WORKERS = 0
-LOAD_MODEL_NAME = "covidx-cxr2-resnet-10epochs-0003"
+NUM_WORKERS = 4
+LOAD_MODEL_NAME = "covidx-cxr2-resnet-20epochs-0003"
 
-NUM_TRAIN, NUM_TEST, NUM_VAL = 50, 50, 50
+NUM_TRAIN, NUM_TEST, NUM_VAL = 20_000, 10_000, 5_000
+USE_SANITISED     = True
 IMAGE_SIZE        = (224, 224)
-BATCH_SIZE_TRAIN  = 10
-BATCH_SIZE_TEST   = 10
-AUGMENT_NOISE     = (0.0, 0.01)
-THRESHOLD         = 0.75
+BATCH_SIZE_TRAIN  = 32
+BATCH_SIZE_TEST   = 32
+AUGMENT_NOISE     = None # (0.0, 0.01)
+THRESHOLD         = 0.5
 
 MODEL_TYPE        = ModelTypes.RESNET
 FREEZE            = True
 LEARNING_RATE     = 0.01
-NUM_EPOCHS        = 3
+NUM_EPOCHS        = 20
 VAL_AFTER_EPOCHS  = 1
 SAVE_AFTER_EPOCHS = NUM_EPOCHS
 
@@ -52,13 +54,36 @@ def print_section_header(str: str):
 def print_info(str: str, val):
     print(f"> {str}: {val}")
 
-def create_demo_annots(file: Path, output: Path, num, split=0.5):
-    # Create the annotations file under data/demo/ based on data/raw/
+def create_demo_annots(file: Path, output: Path, num_instances):
     df = read_annotations_file(file)
-    df = pd.concat([
-        df[df.label == Covidx_CXR2.CLASS_POSITIVE].sample(n = int(num * split)), 
-        df[df.label == Covidx_CXR2.CLASS_NEGATIVE].sample(n = int(num * (1 - split)))
-    ])
+    df_len = df.shape[0]
+    num_positive = int(math.floor(0.5 * num_instances))
+    num_negative = int(math.ceil(0.5 * num_instances))
+    out = []
+    # Add positive instances
+    df_pos = df[df["label"] == Covidx_CXR2.CLASS_POSITIVE]
+    sample_pos = df_pos.sample(min(df_pos.shape[0], num_positive))
+    out.append(sample_pos)
+    num_positive -= sample_pos.shape[0]
+    if num_positive > 0:
+        # Upsample
+        sample_pos = df_pos.sample(num_positive, replace=True)
+        out.append(sample_pos)
+        num_positive -= sample_pos.shape[0]
+    # Add negative instances
+    df_neg = df[df["label"] == Covidx_CXR2.CLASS_NEGATIVE]
+    sample_neg = df_neg.sample(min(df_neg.shape[0], num_negative))
+    out.append(sample_neg)
+    num_negative -= sample_neg.shape[0]
+    if num_negative > 0:
+        # Upsample
+        sample_neg = df_neg.sample(num_negative, replace=True)
+        out.append(sample_neg)
+        num_negative -= sample_neg.shape[0]
+    # Concat all and save
+    df = pd.concat(out)
+    assert(num_positive == 0)
+    assert(num_negative == 0)
     save_annotations_file(df, output)
     return df
 
@@ -70,25 +95,34 @@ def demo(limits):
     dfs = list()
     for af, num in zip(Covidx_CXR2.ANNOTATIONS_FILES, limits):
         # Create the demo annotations files and download the dataset if necessary
-        demo_af = DataDir.demo_file(DataDir.PATH / af)
+        af = DataDir.PATH / af
+        if USE_SANITISED:
+            af = DataDir.sanit_file(af)
+        demo_af = DataDir.demo_file(af)
         if not demo_af.is_file():
             if "download" in STEPS:
                 CovidxDownloader().download(DataDir.PATH)
-            df = create_demo_annots(file=DataDir.PATH / af, output=demo_af, num=num)
+            df = create_demo_annots(file=af, output=demo_af, num_instances=num)
         else:
             df = read_annotations_file(demo_af)
             if df.shape[0] != num:
                 os.remove(demo_af)
-                df = create_demo_annots(file=DataDir.PATH / af, output=demo_af, num=num)
+                df = create_demo_annots(file=af, output=demo_af, num_instances=num)
         assert(df.shape[0] == num)
         df = df.sample(frac=1).reset_index(drop=True)
         dfs.append(df)
 
     train_df, test_df, val_df = tuple(dfs)
     del dfs
-    print_info("Training examples",   num_train)
-    print_info("Testing examples",    num_test)
-    print_info("Validation examples", num_val)
+    print_info("Total training examples",    train_df.shape[0])
+    print_info("Training positive examples", train_df[train_df["label"] == Covidx_CXR2.CLASS_POSITIVE].shape[0])
+    print_info("Training negative examples", train_df[train_df["label"] == Covidx_CXR2.CLASS_NEGATIVE].shape[0])
+    print_info("Total testing examples",    test_df.shape[0])
+    print_info("Testing positive examples", test_df[test_df["label"] == Covidx_CXR2.CLASS_POSITIVE].shape[0])
+    print_info("Testing negative examples", test_df[test_df["label"] == Covidx_CXR2.CLASS_NEGATIVE].shape[0])
+    print_info("Total validation examples",    val_df.shape[0])
+    print_info("Validation positive examples", val_df[val_df["label"] == Covidx_CXR2.CLASS_POSITIVE].shape[0])
+    print_info("Validation negative examples", val_df[val_df["label"] == Covidx_CXR2.CLASS_NEGATIVE].shape[0])
 
     # Load the training dataset and visualise some examples from each class
     train_dataset = CovidxDataset(train_df, DataDir.PATH_TRAIN, image_size=IMAGE_SIZE, noise=AUGMENT_NOISE)
